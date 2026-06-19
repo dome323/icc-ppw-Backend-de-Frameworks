@@ -6,7 +6,7 @@ Domenica Uyunkar
 
 ## Descripción
 
-Proyecto básico desarrollado con Spring Boot para verificar la instalación y funcionamiento del framework.
+Proyecto básico desarrollado con Spring Boot para verificar la instalación y funcionamiento del framework.-
 
 ## Requisitos
 

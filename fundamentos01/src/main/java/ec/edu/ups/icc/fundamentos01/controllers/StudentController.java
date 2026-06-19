@@ -15,8 +15,8 @@ public class StudentController {
     private List<Student> students = new ArrayList<>();
 
     public StudentController() {
-        students.add(new Student("JUAN", 20, 1L));
-        students.add(new Student("MARIA", 22, 2L));
+        students.add(new Student(1L, "JUAN", 20));
+        students.add(new Student(2L, "MARIA", 22));
     }
 
     @GetMapping

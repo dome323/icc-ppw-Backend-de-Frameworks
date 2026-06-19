@@ -1,15 +1,15 @@
 package ec.edu.ups.icc.fundamentos01.students.controllers.models;
 
 public class Student {
-  private long id;
+    private long id;
     private String name;
     private int age;
 
 
-    public Student(String name, int age, long id) {
+    public Student(long id, String name, int age) {
+        this.id = id;
         this.name = name;
         this.age = age;
-        this.id = id;
     }
 
     public String getName() {
