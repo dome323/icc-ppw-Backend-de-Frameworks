@@ -18,44 +18,28 @@ import ec.edu.ups.icc.fundamentos01.products.dtos.ProductResponseDto;
 import ec.edu.ups.icc.fundamentos01.products.dtos.UpdateProductDto;
 import ec.edu.ups.icc.fundamentos01.products.services.ProductService;
 
-/*
- * Controlador REST para la gestión de productos.
- *
- * El controlador solamente recibe las peticiones HTTP
- * y delega las operaciones al servicio.
- */
 @RestController
 @RequestMapping("/products")
 public class ProductsController {
 
     private final ProductService service;
 
-    /*
-     * Inyección de dependencias por constructor.
-     */
     public ProductsController(ProductService service) {
         this.service = service;
     }
 
-    /*
-     * GET /products
-     */
     @GetMapping
     public List<ProductResponseDto> findAll() {
         return service.findAll();
     }
 
-    /*
-     * GET /products/{id}
-     */
     @GetMapping("/{id}")
-    public Object findOne(@PathVariable Long id) {
+    public ProductResponseDto findOne(
+            @PathVariable Long id) {
+
         return service.findOne(id);
     }
 
-    /*
-     * POST /products
-     */
     @PostMapping
     public ProductResponseDto create(
             @RequestBody CreateProductDto dto) {
@@ -63,33 +47,24 @@ public class ProductsController {
         return service.create(dto);
     }
 
-    /*
-     * PUT /products/{id}
-     */
     @PutMapping("/{id}")
-    public Object update(
+    public ProductResponseDto update(
             @PathVariable Long id,
             @RequestBody UpdateProductDto dto) {
 
         return service.update(id, dto);
     }
 
-    /*
-     * PATCH /products/{id}
-     */
     @PatchMapping("/{id}")
-    public Object partialUpdate(
+    public ProductResponseDto partialUpdate(
             @PathVariable Long id,
             @RequestBody PartialUpdateProductDto dto) {
 
         return service.partialUpdate(id, dto);
     }
 
-    /*
-     * DELETE /products/{id}
-     */
     @DeleteMapping("/{id}")
-    public Object delete(@PathVariable Long id) {
-        return service.delete(id);
+    public void delete(@PathVariable Long id) {
+        service.delete(id);
     }
 }
