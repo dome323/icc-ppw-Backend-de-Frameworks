@@ -31,6 +31,8 @@ dependencies {
 
 	// Ejecución de pruebas con JUnit
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	// Validación de datos
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
 }
 
 tasks.named('test') {

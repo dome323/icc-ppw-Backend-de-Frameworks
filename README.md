@@ -535,3 +535,733 @@ La implementación de la capa de servicios permite separar las responsabilidades
 `ProductsController` se encarga de recibir las peticiones HTTP, mientras que `ProductServiceImpl` administra la lógica de negocio, la generación de identificadores y el almacenamiento temporal de los productos.
 
 Esta organización mejora la estructura del proyecto y facilita la incorporación futura de repositorios y una base de datos.
+
+---
+
+# Práctica 5: Persistencia con PostgreSQL, JPA y repositorios
+
+## Descripción
+
+En esta práctica se reemplazó el almacenamiento temporal en memoria por una base de datos PostgreSQL.
+
+En las prácticas anteriores, los productos se guardaban en una lista dentro de `ProductServiceImpl`, por lo que la información se perdía cada vez que se reiniciaba la aplicación.
+
+Ahora, los productos se almacenan permanentemente en PostgreSQL utilizando:
+
+* Spring Data JPA
+* Hibernate
+* PostgreSQL
+* Docker
+* Entidades JPA
+* Repositorios
+
+La aplicación mantiene la separación entre controladores, servicios, modelos, DTOs, mappers, entidades y repositorios.
+
+## Configuración de PostgreSQL
+
+La base de datos se ejecuta mediante un contenedor de Docker con la siguiente configuración:
+
+| Propiedad     | Valor          |
+| ------------- | -------------- |
+| Contenedor    | `postgres-dev` |
+| Servidor      | `localhost`    |
+| Puerto        | `5432`         |
+| Base de datos | `devdb`        |
+| Usuario       | `ups`          |
+| Contraseña    | `ups123`       |
+
+La conexión desde Spring Boot se configuró en `application.yml`:
+
+```yaml
+server:
+  servlet:
+    context-path: /api
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/devdb
+    username: ups
+    password: ups123
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+```
+
+La opción:
+
+```yaml
+ddl-auto: update
+```
+
+permite que Hibernate cree o actualice automáticamente las tablas sin eliminar los datos existentes.
+
+## Estructura del módulo de productos
+
+```text
+products/
+├── controllers/
+│   └── ProductsController.java
+├── dtos/
+│   ├── CreateProductDto.java
+│   ├── PartialUpdateProductDto.java
+│   ├── ProductResponseDto.java
+│   └── UpdateProductDto.java
+├── entities/
+│   └── ProductEntity.java
+├── mappers/
+│   └── ProductMapper.java
+├── models/
+│   └── ProductModel.java
+├── repositories/
+│   └── ProductRepository.java
+└── services/
+    ├── ProductService.java
+    └── ProductServiceImpl.java
+```
+
+Además, se creó la clase base:
+
+```text
+core/
+└── entities/
+    └── BaseEntity.java
+```
+
+## BaseEntity
+
+`BaseEntity` es una superclase que contiene los campos comunes de persistencia que pueden ser heredados por diferentes entidades.
+
+```java
+@MappedSuperclass
+public abstract class BaseEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private LocalDateTime createdAt;
+
+    private LocalDateTime updatedAt;
+
+    private boolean deleted;
+
+    @PrePersist
+    protected void onCreate() {
+        this.createdAt = LocalDateTime.now();
+        this.deleted = false;
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = LocalDateTime.now();
+    }
+}
+```
+
+La anotación `@MappedSuperclass` indica que esta clase no genera una tabla propia. Sus atributos son heredados por las entidades que extienden de ella.
+
+Los campos heredados son:
+
+* `id`: identificador generado automáticamente por PostgreSQL.
+* `createdAt`: fecha y hora de creación del registro.
+* `updatedAt`: fecha y hora de la última actualización.
+* `deleted`: indica si el registro fue eliminado lógicamente.
+
+## ProductEntity
+
+`ProductEntity` representa la tabla `products` dentro de PostgreSQL.
+
+```java
+@Entity
+@Table(name = "products")
+public class ProductEntity extends BaseEntity {
+
+    @Column(nullable = false, length = 150)
+    private String name;
+
+    @Column(nullable = false)
+    private Double price;
+
+    @Column(nullable = false)
+    private Integer stock;
+}
+```
+
+La entidad extiende de `BaseEntity`, por lo que también contiene los campos `id`, `createdAt`, `updatedAt` y `deleted`.
+
+## ProductRepository
+
+El repositorio permite realizar operaciones de persistencia mediante Spring Data JPA.
+
+```java
+@Repository
+public interface ProductRepository
+        extends JpaRepository<ProductEntity, Long> {
+}
+```
+
+Al extender de `JpaRepository`, se obtienen métodos como:
+
+```java
+save()
+findAll()
+findById()
+deleteById()
+existsById()
+count()
+```
+
+Por esta razón, ya no es necesario mantener una lista de productos en memoria.
+
+## Flujo de datos hacia PostgreSQL
+
+Cuando se crea un producto, el flujo es el siguiente:
+
+```text
+Postman
+   ↓
+ProductsController
+   ↓
+ProductService
+   ↓
+ProductServiceImpl
+   ↓
+ProductMapper
+   ↓
+ProductEntity
+   ↓
+ProductRepository
+   ↓
+Spring Data JPA / Hibernate
+   ↓
+PostgreSQL
+```
+
+El cliente envía una petición HTTP desde Postman hacia `ProductsController`.
+
+El controlador delega la operación a `ProductService`. La implementación `ProductServiceImpl` convierte el DTO recibido en un modelo mediante `ProductMapper`.
+
+Posteriormente, el modelo se convierte en una entidad y se guarda mediante `ProductRepository`.
+
+Spring Data JPA e Hibernate generan la sentencia SQL necesaria para insertar el producto en la tabla `products` de PostgreSQL.
+
+## Flujo de datos desde PostgreSQL hacia la API
+
+Cuando se consulta un producto, el flujo es:
+
+```text
+PostgreSQL
+   ↓
+ProductRepository
+   ↓
+ProductEntity
+   ↓
+ProductMapper
+   ↓
+ProductModel
+   ↓
+ProductResponseDto
+   ↓
+ProductsController
+   ↓
+Postman
+```
+
+El repositorio recupera la entidad almacenada en PostgreSQL.
+
+Después, `ProductMapper` convierte la entidad en un modelo y posteriormente en un `ProductResponseDto`.
+
+Finalmente, el controlador devuelve al cliente solamente los datos públicos del producto.
+
+## Endpoints persistentes de productos
+
+| Método | Endpoint             | Descripción                          |
+| ------ | -------------------- | ------------------------------------ |
+| GET    | `/api/products`      | Obtener todos los productos          |
+| GET    | `/api/products/{id}` | Obtener un producto por ID           |
+| POST   | `/api/products`      | Crear un producto en PostgreSQL      |
+| PUT    | `/api/products/{id}` | Actualizar completamente un producto |
+| PATCH  | `/api/products/{id}` | Actualizar parcialmente un producto  |
+| DELETE | `/api/products/{id}` | Realizar eliminación lógica          |
+
+## Eliminación lógica
+
+El endpoint `DELETE` no elimina físicamente el registro de la base de datos.
+
+En su lugar, modifica el campo:
+
+```java
+deleted = true;
+```
+
+Esto permite conservar el registro en PostgreSQL y mantener un historial de la información.
+
+## Verificación en PostgreSQL
+
+Para ingresar al contenedor se utilizó:
+
+```bash
+docker exec -it postgres-dev psql -U ups -d devdb
+```
+
+Para consultar las tablas:
+
+```sql
+\dt
+```
+
+Para consultar los productos:
+
+```sql
+SELECT id, name, price, stock, created_at, updated_at, deleted
+FROM products
+ORDER BY id;
+```
+
+## Evidencia: cinco productos almacenados en PostgreSQL
+
+La siguiente evidencia muestra los cinco productos creados mediante la API REST y almacenados correctamente en PostgreSQL.
+
+![Cinco productos en PostgreSQL](img/products-postgresql.png)
+
+Los productos almacenados fueron:
+
+| ID | Producto  | Precio | Stock |
+| -: | --------- | -----: | ----: |
+|  1 | Laptop    | 850.50 |    10 |
+|  2 | Teclado   |  35.99 |    20 |
+|  3 | Audífonos |  49.90 |    15 |
+|  4 | Mouse     |  18.75 |    30 |
+|  5 | Monitor   | 225.00 |     8 |
+
+La columna `created_at` demuestra que `BaseEntity` asignó automáticamente la fecha de creación.
+
+La columna `deleted` aparece con el valor `f`, que en PostgreSQL significa `false`. Esto indica que los productos todavía no han sido eliminados lógicamente.
+
+## Persistencia de la información
+
+A diferencia del almacenamiento en memoria utilizado en las prácticas anteriores, los productos no desaparecen cuando se reinicia Spring Boot.
+
+Los registros permanecen almacenados dentro de la base de datos PostgreSQL y pueden volver a consultarse después de reiniciar la aplicación.
+
+## Conclusión
+
+La implementación de Spring Data JPA y PostgreSQL permite almacenar los productos de manera permanente.
+
+`ProductsController` recibe las peticiones HTTP, `ProductServiceImpl` administra la lógica de negocio y `ProductRepository` ejecuta las operaciones de persistencia.
+
+`ProductEntity` representa la tabla `products`, mientras que `BaseEntity` proporciona los campos comunes de auditoría y eliminación lógica.
+
+Esta arquitectura mantiene separadas las responsabilidades de cada capa y permite que la aplicación pueda ampliarse de manera organizada.
+
+
+
+---
+# Práctica 6: Validación de DTOs y control de datos de entrada
+
+## Descripción
+
+En esta práctica se implementaron validaciones para controlar los datos recibidos por la API antes de enviarlos al servicio y almacenarlos en PostgreSQL.
+
+Las validaciones se aplicaron mediante Jakarta Validation en los DTOs de creación, actualización completa y actualización parcial de productos.
+
+También se reemplazó `ProductMapper` por métodos de conversión dentro del modelo de dominio `Product`.
+
+## Dependencia de validación
+
+Para utilizar Jakarta Validation se agregó la siguiente dependencia en `build.gradle`:
+
+```gradle
+implementation 'org.springframework.boot:spring-boot-starter-validation'
+```
+
+## Validaciones implementadas
+
+| Campo   | Validación                                    |
+| ------- | --------------------------------------------- |
+| `name`  | Obligatorio, mínimo 3 y máximo 150 caracteres |
+| `price` | Obligatorio y mayor o igual a 0               |
+| `stock` | Obligatorio y mayor o igual a 0               |
+
+Las validaciones se activaron en `ProductsController` mediante:
+
+```java
+@Valid @RequestBody
+```
+
+Ejemplo del endpoint de creación:
+
+```java
+@PostMapping
+public ProductResponseDto create(
+        @Valid @RequestBody CreateProductDto dto) {
+
+    return service.create(dto);
+}
+```
+
+Cuando los datos no cumplen las reglas establecidas, Spring Boot detiene la petición antes de ejecutar el servicio y devuelve una respuesta:
+
+```text
+400 Bad Request
+```
+
+## Validación de CreateProductDto
+
+El DTO utilizado para crear productos contiene las siguientes reglas:
+
+```java
+public class CreateProductDto {
+
+    @NotBlank(message = "El nombre es obligatorio")
+    @Size(
+            min = 3,
+            max = 150,
+            message = "El nombre debe tener entre 3 y 150 caracteres"
+    )
+    private String name;
+
+    @NotNull(message = "El precio es obligatorio")
+    @DecimalMin(
+            value = "0.0",
+            inclusive = true,
+            message = "El precio debe ser mayor o igual a 0"
+    )
+    private Double price;
+
+    @NotNull(message = "El stock es obligatorio")
+    @Min(
+            value = 0,
+            message = "El stock debe ser mayor o igual a 0"
+    )
+    private Integer stock;
+}
+```
+
+## Validación de UpdateProductDto
+
+El DTO de actualización completa exige que todos los campos sean enviados y que cumplan las reglas de validación.
+
+```java
+@NotBlank
+@Size(min = 3, max = 150)
+private String name;
+
+@NotNull
+@DecimalMin(value = "0.0", inclusive = true)
+private Double price;
+
+@NotNull
+@Min(0)
+private Integer stock;
+```
+
+## Validación de PartialUpdateProductDto
+
+En la actualización parcial los campos pueden ser nulos, porque solamente se modifica la información enviada por el cliente.
+
+```java
+@Size(min = 3, max = 150)
+private String name;
+
+@DecimalMin(value = "0.0", inclusive = true)
+private Double price;
+
+@Min(0)
+private Integer stock;
+```
+
+## Métodos factory del dominio Product
+
+El nuevo modelo de dominio `Product` se encarga de realizar sus propias conversiones.
+
+Los métodos implementados son:
+
+```java
+Product.fromDto()
+Product.fromEntity()
+product.toEntity()
+product.toResponseDto()
+product.update()
+product.partialUpdate()
+```
+
+### Conversión desde DTO
+
+```java
+public static Product fromDto(CreateProductDto dto) {
+
+    Product product = new Product();
+
+    product.setName(dto.getName());
+    product.setPrice(dto.getPrice());
+    product.setStock(dto.getStock());
+    product.setDeleted(false);
+
+    return product;
+}
+```
+
+### Conversión desde entidad
+
+```java
+public static Product fromEntity(ProductEntity entity) {
+
+    Product product = new Product();
+
+    product.setId(entity.getId());
+    product.setName(entity.getName());
+    product.setPrice(entity.getPrice());
+    product.setStock(entity.getStock());
+    product.setCreatedAt(entity.getCreatedAt());
+    product.setUpdatedAt(entity.getUpdatedAt());
+    product.setDeleted(entity.isDeleted());
+
+    return product;
+}
+```
+
+### Conversión hacia entidad
+
+```java
+public ProductEntity toEntity() {
+
+    ProductEntity entity = new ProductEntity();
+
+    entity.setId(this.id);
+    entity.setName(this.name);
+    entity.setPrice(this.price);
+    entity.setStock(this.stock);
+    entity.setCreatedAt(this.createdAt);
+    entity.setUpdatedAt(this.updatedAt);
+    entity.setDeleted(this.deleted);
+
+    return entity;
+}
+```
+
+### Conversión hacia DTO de respuesta
+
+```java
+public ProductResponseDto toResponseDto() {
+
+    ProductResponseDto response = new ProductResponseDto();
+
+    response.setId(this.id);
+    response.setName(this.name);
+    response.setPrice(this.price);
+    response.setStock(this.stock);
+
+    return response;
+}
+```
+
+Debido a esta modificación, el módulo de productos ya no utiliza:
+
+```text
+ProductMapper.java
+ProductModel.java
+```
+
+Las conversiones se encuentran centralizadas en el dominio `Product`.
+
+## Reglas de negocio implementadas
+
+En `ProductServiceImpl` se agregaron las siguientes reglas:
+
+* Los productos eliminados no aparecen en `findAll()`.
+* No se permite consultar un producto eliminado.
+* No se permite actualizar un producto eliminado.
+* No se permite realizar una actualización parcial sobre un producto eliminado.
+* No se permite eliminar dos veces el mismo producto.
+* La eliminación continúa siendo lógica mediante el atributo `deleted`.
+
+## Exclusión de productos eliminados
+
+El método `findAll()` filtra las entidades eliminadas:
+
+```java
+@Override
+public List<ProductResponseDto> findAll() {
+
+    return productRepository.findAll()
+            .stream()
+            .filter(entity -> !entity.isDeleted())
+            .map(Product::fromEntity)
+            .map(Product::toResponseDto)
+            .toList();
+}
+```
+
+La siguiente condición permite devolver únicamente los productos activos:
+
+```java
+.filter(entity -> !entity.isDeleted())
+```
+
+## Validación de producto activo
+
+Antes de consultar o actualizar un producto, se verifica que exista y que no esté eliminado:
+
+```java
+private ProductEntity findActiveEntity(Long id) {
+
+    ProductEntity entity = productRepository.findById(id)
+            .orElseThrow(() ->
+                    new IllegalStateException(
+                            "Product not found"));
+
+    if (entity.isDeleted()) {
+        throw new IllegalStateException(
+                "Product is deleted");
+    }
+
+    return entity;
+}
+```
+
+## Control de eliminación duplicada
+
+Antes de eliminar un producto se comprueba si ya estaba eliminado:
+
+```java
+if (entity.isDeleted()) {
+    throw new IllegalStateException(
+            "Product already deleted");
+}
+```
+
+## Flujo de validación
+
+```text
+Postman
+   ↓
+ProductsController
+   ↓
+@Valid
+   ↓
+DTO con anotaciones de validación
+   ↓
+ProductService
+   ↓
+ProductServiceImpl
+   ↓
+ProductRepository
+   ↓
+PostgreSQL
+```
+
+Si el DTO contiene datos inválidos, la petición se detiene antes de llegar a `ProductServiceImpl`.
+
+## Evidencias
+
+### Evidencia 1: Error al crear un producto inválido
+
+Se realizó una petición:
+
+```http
+POST /api/products
+```
+
+Con el siguiente cuerpo inválido:
+
+```json
+{
+  "name": "",
+  "price": -5,
+  "stock": -1
+}
+```
+
+El nombre se encuentra vacío, el precio es negativo y el stock también es negativo.
+
+Spring Boot rechazó la petición y devolvió:
+
+```text
+400 Bad Request
+```
+
+![POST inválido de producto](img/post-invalido-pro.png)
+
+Esta evidencia demuestra que las anotaciones `@NotBlank`, `@Size`, `@DecimalMin` y `@Min` se ejecutan correctamente mediante `@Valid`.
+
+### Evidencia 2: Error al actualizar un producto eliminado
+
+Primero se realizó la eliminación lógica del producto mediante:
+
+```http
+DELETE /api/products/{id}
+```
+
+Después se intentó actualizar el mismo producto utilizando:
+
+```http
+PUT /api/products/{id}
+```
+
+El servicio rechazó la operación porque el producto tenía el campo:
+
+```text
+deleted = true
+```
+
+![Actualizar producto eliminado](img/act-pro-actualizado.png)
+
+La operación fue rechazada mediante la siguiente regla de negocio:
+
+```java
+if (entity.isDeleted()) {
+    throw new IllegalStateException(
+            "Product is deleted");
+}
+```
+
+En esta práctica todavía no se utiliza un manejador global de excepciones, por lo que la respuesta puede mostrarse como un error técnico del servidor.
+
+### Evidencia 3: Consulta de productos activos
+
+Se realizó la petición:
+
+```http
+GET /api/products
+```
+
+La respuesta solamente muestra los productos activos.
+
+![Listado de productos activos](img/findAll.png)
+
+El producto eliminado lógicamente no aparece en la respuesta debido al filtro:
+
+```java
+.filter(entity -> !entity.isDeleted())
+```
+
+## Resultados obtenidos
+
+Las pruebas realizadas permitieron comprobar que:
+
+* Un nombre vacío genera `400 Bad Request`.
+* Un nombre con menos de tres caracteres genera `400 Bad Request`.
+* Un precio negativo genera `400 Bad Request`.
+* Un stock negativo genera `400 Bad Request`.
+* Un producto válido se almacena correctamente en PostgreSQL.
+* No se permite actualizar un producto eliminado.
+* No se permite eliminar dos veces el mismo producto.
+* `findAll()` no devuelve productos eliminados.
+* Las conversiones del módulo se realizan mediante el dominio `Product`.
+
+## Conclusión
+
+La implementación de Jakarta Validation permite impedir que datos incorrectos lleguen a la lógica de negocio y sean almacenados en PostgreSQL.
+
+Las reglas de los DTOs validan el formato y los valores recibidos, mientras que `ProductServiceImpl` valida reglas de negocio relacionadas con la eliminación lógica.
+
+La incorporación de métodos factory en el dominio `Product` permite centralizar las conversiones entre DTOs, entidades y respuestas, eliminando la dependencia de `ProductMapper`.
+
+Finalmente, la aplicación garantiza que los productos eliminados no puedan consultarse, actualizarse ni eliminarse nuevamente.
