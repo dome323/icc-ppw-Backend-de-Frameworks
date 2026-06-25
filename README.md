@@ -1265,3 +1265,545 @@ Las reglas de los DTOs validan el formato y los valores recibidos, mientras que 
 La incorporación de métodos factory en el dominio `Product` permite centralizar las conversiones entre DTOs, entidades y respuestas, eliminando la dependencia de `ProductMapper`.
 
 Finalmente, la aplicación garantiza que los productos eliminados no puedan consultarse, actualizarse ni eliminarse nuevamente.
+
+---
+
+# Práctica 7: Manejo global de errores y excepciones
+
+## Descripción
+
+En esta práctica se implementó un sistema global para manejar los errores y excepciones producidos en la API REST.
+
+Anteriormente, los servicios lanzaban excepciones genéricas como:
+
+```java
+throw new IllegalStateException("Product not found");
+```
+
+Esto provocaba respuestas técnicas e incorrectas, normalmente con estado:
+
+```text
+500 Internal Server Error
+```
+
+Ahora se utilizan excepciones propias de la aplicación, asociadas a códigos HTTP específicos:
+
+| Excepción             | Código HTTP | Uso                                      |
+| --------------------- | ----------: | ---------------------------------------- |
+| `NotFoundException`   |         404 | Recurso inexistente o eliminado          |
+| `ConflictException`   |         409 | Conflicto con datos ya registrados       |
+| `BadRequestException` |         400 | Solicitud inválida por reglas de negocio |
+
+Todas las excepciones son capturadas por `GlobalExceptionHandler`, que genera una respuesta uniforme mediante `ErrorResponse`.
+
+## Estructura implementada
+
+```text
+core/
+└── exceptions/
+    ├── base/
+    │   └── ApplicationException.java
+    ├── domain/
+    │   ├── NotFoundException.java
+    │   ├── ConflictException.java
+    │   └── BadRequestException.java
+    ├── handler/
+    │   └── GlobalExceptionHandler.java
+    └── response/
+        └── ErrorResponse.java
+```
+
+## ApplicationException
+
+`ApplicationException` es la excepción base de la aplicación.
+
+Todas las excepciones propias heredan de esta clase y tienen asociado un estado HTTP.
+
+```java
+public abstract class ApplicationException
+        extends RuntimeException {
+
+    private final HttpStatus status;
+
+    protected ApplicationException(
+            HttpStatus status,
+            String message) {
+
+        super(message);
+        this.status = status;
+    }
+
+    public HttpStatus getStatus() {
+        return status;
+    }
+}
+```
+
+## Excepciones de dominio
+
+### NotFoundException
+
+Se utiliza cuando un producto no existe o fue eliminado lógicamente.
+
+```java
+public class NotFoundException
+        extends ApplicationException {
+
+    public NotFoundException(String message) {
+        super(HttpStatus.NOT_FOUND, message);
+    }
+}
+```
+
+Ejemplo de uso:
+
+```java
+throw new NotFoundException("Product not found");
+```
+
+### ConflictException
+
+Se utiliza cuando existe un conflicto con información ya almacenada.
+
+En el módulo de productos se utiliza para impedir nombres duplicados.
+
+```java
+public class ConflictException
+        extends ApplicationException {
+
+    public ConflictException(String message) {
+        super(HttpStatus.CONFLICT, message);
+    }
+}
+```
+
+Ejemplo:
+
+```java
+throw new ConflictException(
+        "Product name already registered");
+```
+
+### BadRequestException
+
+Se utiliza cuando una solicitud incumple una regla de negocio.
+
+```java
+public class BadRequestException
+        extends ApplicationException {
+
+    public BadRequestException(String message) {
+        super(HttpStatus.BAD_REQUEST, message);
+    }
+}
+```
+
+## Formato estándar ErrorResponse
+
+Todos los errores de la API utilizan la misma estructura:
+
+```java
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class ErrorResponse {
+
+    private LocalDateTime timestamp;
+    private int status;
+    private String error;
+    private String message;
+    private String path;
+    private Map<String, String> details;
+}
+```
+
+Los campos utilizados son:
+
+| Campo       | Descripción                       |
+| ----------- | --------------------------------- |
+| `timestamp` | Fecha y hora del error            |
+| `status`    | Código HTTP                       |
+| `error`     | Nombre del error HTTP             |
+| `message`   | Mensaje general                   |
+| `path`      | Endpoint donde ocurrió el error   |
+| `details`   | Errores específicos de validación |
+
+El campo `details` solo aparece cuando existen errores específicos en los campos del DTO.
+
+## GlobalExceptionHandler
+
+El manejador global utiliza:
+
+```java
+@RestControllerAdvice
+```
+
+Esta anotación permite capturar excepciones producidas desde cualquier controlador o servicio.
+
+### Manejo de excepciones de la aplicación
+
+```java
+@ExceptionHandler(ApplicationException.class)
+public ResponseEntity<ErrorResponse>
+        handleApplicationException(
+                ApplicationException exception,
+                HttpServletRequest request) {
+
+    ErrorResponse response = new ErrorResponse(
+            exception.getStatus(),
+            exception.getMessage(),
+            request.getRequestURI()
+    );
+
+    return ResponseEntity
+            .status(exception.getStatus())
+            .body(response);
+}
+```
+
+Este método captura:
+
+```text
+NotFoundException
+ConflictException
+BadRequestException
+```
+
+### Manejo de errores de validación
+
+```java
+@ExceptionHandler(MethodArgumentNotValidException.class)
+public ResponseEntity<ErrorResponse>
+        handleValidationException(
+                MethodArgumentNotValidException exception,
+                HttpServletRequest request) {
+
+    Map<String, String> errors =
+            new LinkedHashMap<>();
+
+    exception.getBindingResult()
+            .getFieldErrors()
+            .forEach(error ->
+                    errors.put(
+                            error.getField(),
+                            error.getDefaultMessage()
+                    )
+            );
+
+    ErrorResponse response = new ErrorResponse(
+            HttpStatus.BAD_REQUEST,
+            "Datos de entrada inválidos",
+            request.getRequestURI(),
+            errors
+    );
+
+    return ResponseEntity
+            .badRequest()
+            .body(response);
+}
+```
+
+Este método captura los errores generados por:
+
+```java
+@Valid @RequestBody
+```
+
+### Manejo de errores inesperados
+
+```java
+@ExceptionHandler(Exception.class)
+public ResponseEntity<ErrorResponse>
+        handleUnexpectedException(
+                Exception exception,
+                HttpServletRequest request) {
+
+    ErrorResponse response = new ErrorResponse(
+            HttpStatus.INTERNAL_SERVER_ERROR,
+            "Error interno del servidor",
+            request.getRequestURI()
+    );
+
+    return ResponseEntity
+            .status(HttpStatus.INTERNAL_SERVER_ERROR)
+            .body(response);
+}
+```
+
+Este método evita que el cliente reciba stack traces o información técnica interna.
+
+## Validación de nombres duplicados
+
+En `ProductRepository` se agregó:
+
+```java
+Optional<ProductEntity> findByName(String name);
+```
+
+Antes de crear un producto, el servicio verifica si ya existe otro producto activo con el mismo nombre:
+
+```java
+Optional<ProductEntity> existingProduct =
+        productRepository.findByName(
+                dto.getName());
+
+if (existingProduct.isPresent()
+        && !existingProduct.get().isDeleted()) {
+
+    throw new ConflictException(
+            "Product name already registered");
+}
+```
+
+## Validación de productos inexistentes o eliminados
+
+Para buscar un producto activo se utiliza:
+
+```java
+private ProductEntity findActiveEntity(Long id) {
+
+    ProductEntity entity =
+            productRepository.findById(id)
+                    .orElseThrow(() ->
+                            new NotFoundException(
+                                    "Product not found"));
+
+    if (entity.isDeleted()) {
+        throw new NotFoundException(
+                "Product not found");
+    }
+
+    return entity;
+}
+```
+
+Este método es utilizado por:
+
+```text
+findOne()
+update()
+partialUpdate()
+```
+
+De esta forma, un producto inexistente o eliminado responde con:
+
+```text
+404 Not Found
+```
+
+## Flujo del manejo global de errores
+
+```text
+Postman
+   ↓
+ProductsController
+   ↓
+ProductServiceImpl
+   ↓
+Lanza una excepción de dominio
+   ↓
+GlobalExceptionHandler
+   ↓
+ErrorResponse
+   ↓
+Respuesta HTTP uniforme
+```
+
+En los errores de validación, el flujo es:
+
+```text
+Postman
+   ↓
+ProductsController
+   ↓
+@Valid
+   ↓
+MethodArgumentNotValidException
+   ↓
+GlobalExceptionHandler
+   ↓
+ErrorResponse con details
+   ↓
+400 Bad Request
+```
+
+# Evidencias
+
+## Evidencia 1: Producto inexistente
+
+Se realizó la petición:
+
+```http
+GET /api/products/999
+```
+
+El producto solicitado no existe en PostgreSQL.
+
+La API respondió con:
+
+```text
+404 Not Found
+```
+
+y con un formato uniforme parecido a:
+
+```json
+{
+  "timestamp": "2026-06-25T05:09:04",
+  "status": 404,
+  "error": "Not Found",
+  "message": "Product not found",
+  "path": "/api/products/999"
+}
+```
+
+![Producto inexistente](img/producto-inexistente.png)
+
+Esta evidencia demuestra que `NotFoundException` es capturada correctamente por `GlobalExceptionHandler`.
+
+## Evidencia 2: Producto con nombre duplicado
+
+Primero se creó correctamente un producto mediante:
+
+```http
+POST /api/products
+```
+
+Después se intentó crear otro producto activo utilizando exactamente el mismo nombre.
+
+La API respondió con:
+
+```text
+409 Conflict
+```
+
+y con el mensaje:
+
+```text
+Product name already registered
+```
+
+![Producto duplicado](img/producto-duplicado.png)
+
+Esta evidencia demuestra que `ConflictException` evita registrar dos productos activos con el mismo nombre.
+
+## Evidencia 3: Validación de DTO
+
+Se realizó una petición:
+
+```http
+POST /api/products
+```
+
+con el siguiente cuerpo inválido:
+
+```json
+{
+  "name": "",
+  "price": -5,
+  "stock": -1
+}
+```
+
+La API respondió con:
+
+```text
+400 Bad Request
+```
+
+La respuesta incluye el campo `details`, con los errores correspondientes a cada atributo:
+
+```json
+{
+  "status": 400,
+  "error": "Bad Request",
+  "message": "Datos de entrada inválidos",
+  "path": "/api/products",
+  "details": {
+    "name": "El nombre es obligatorio",
+    "price": "El precio debe ser mayor o igual a 0",
+    "stock": "El stock debe ser mayor o igual a 0"
+  }
+}
+```
+
+![Validación del DTO](img/validacion-dto.png)
+
+Esta evidencia demuestra que `MethodArgumentNotValidException` es capturada por el manejador global.
+
+## Evidencia 4: Consulta de producto eliminado
+
+Primero se eliminó lógicamente un producto mediante:
+
+```http
+DELETE /api/products/{id}
+```
+
+Después se intentó consultar nuevamente el mismo producto:
+
+```http
+GET /api/products/{id}
+```
+
+La API respondió con:
+
+```text
+404 Not Found
+```
+
+![Producto eliminado](img/producto-eliminado.png)
+
+Aunque el registro todavía existe en PostgreSQL, el campo:
+
+```text
+deleted = true
+```
+
+hace que el producto ya no esté disponible para consultas o actualizaciones.
+
+## Resultados obtenidos
+
+Las pruebas realizadas permitieron comprobar que:
+
+* Un producto inexistente responde con `404 Not Found`.
+* Un producto eliminado lógicamente responde con `404 Not Found`.
+* Un nombre de producto duplicado responde con `409 Conflict`.
+* Los datos inválidos responden con `400 Bad Request`.
+* Los errores de validación incluyen el campo `details`.
+* Todos los errores mantienen el mismo formato.
+* No se muestran stack traces al cliente.
+* Los controladores no utilizan bloques `try/catch`.
+* Los servicios no construyen respuestas HTTP manualmente.
+* Las excepciones expresan claramente el error ocurrido.
+
+## Comparación antes y después
+
+### Antes
+
+```text
+ProductServiceImpl
+   ↓
+IllegalStateException
+   ↓
+500 Internal Server Error
+```
+
+### Ahora
+
+```text
+ProductServiceImpl
+   ↓
+NotFoundException / ConflictException
+   ↓
+GlobalExceptionHandler
+   ↓
+ErrorResponse
+   ↓
+404 / 409
+```
+
+## Conclusión
+
+La implementación de un manejador global de excepciones permite centralizar y estandarizar todos los errores producidos por la API.
+
+Las excepciones de dominio representan claramente el problema ocurrido, mientras que `GlobalExceptionHandler` se encarga de convertirlas en respuestas HTTP apropiadas.
+
+La aplicación ahora devuelve códigos correctos como `400`, `404` y `409`, evita exponer información técnica y proporciona respuestas útiles para clientes frontend.
