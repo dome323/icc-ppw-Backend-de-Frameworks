@@ -11,13 +11,17 @@ public interface UserService {
 
     List<UserResponseDto> findAll();
 
-    Object findOne(Long id);
+    UserResponseDto findOne(Long id);
 
     UserResponseDto create(CreateUserDto dto);
 
-    Object update(Long id, UpdateUserDto dto);
+    UserResponseDto update(
+            Long id,
+            UpdateUserDto dto);
 
-    Object partialUpdate(Long id, PartialUpdateUserDto dto);
+    UserResponseDto partialUpdate(
+            Long id,
+            PartialUpdateUserDto dto);
 
-    Object delete(Long id);
+    void delete(Long id);
 }
