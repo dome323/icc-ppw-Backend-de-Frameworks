@@ -1,0 +1,56 @@
+package ec.edu.ups.icc.fundamentos01.security.services;
+
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import ec.edu.ups.icc.fundamentos01.users.entity.UserEntity;
+import ec.edu.ups.icc.fundamentos01.users.repositories.UserRepository;
+
+/*
+ * Servicio que Spring Security usa para cargar
+ * usuarios desde la base de datos.
+ */
+@Service
+public class UserDetailsServiceImpl implements UserDetailsService {
+
+    private final UserRepository userRepository;
+
+    public UserDetailsServiceImpl(
+            UserRepository userRepository
+    ) {
+        this.userRepository = userRepository;
+    }
+
+    /*
+     * Spring Security llama este método
+     * durante el login.
+     *
+     * Aunque se llama username,
+     * nosotros usamos email.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public UserDetails loadUserByUsername(
+            String email
+    ) throws UsernameNotFoundException {
+
+        UserEntity user =
+                userRepository
+                        .findByEmailAndDeletedFalse(
+                                email
+                        )
+                        .orElseThrow(() ->
+                                new UsernameNotFoundException(
+                                        "Usuario no encontrado con email: "
+                                                + email
+                                )
+                        );
+
+        return UserDetailsImpl.build(
+                user
+        );
+    }
+}
