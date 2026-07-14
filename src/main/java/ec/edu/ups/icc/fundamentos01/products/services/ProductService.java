@@ -12,6 +12,7 @@ import ec.edu.ups.icc.fundamentos01.products.dtos.ProductFilterByCategoryDto;
 import ec.edu.ups.icc.fundamentos01.products.dtos.ProductFilterByUserDto;
 import ec.edu.ups.icc.fundamentos01.products.dtos.ProductResponseDto;
 import ec.edu.ups.icc.fundamentos01.products.dtos.UpdateProductDto;
+import ec.edu.ups.icc.fundamentos01.security.services.UserDetailsImpl;
 
 public interface ProductService {
 
@@ -20,20 +21,26 @@ public interface ProductService {
     ProductResponseDto findOne(Long id);
 
     ProductResponseDto create(
-            CreateProductDto dto
+            CreateProductDto dto,
+            UserDetailsImpl currentUser
     );
 
     ProductResponseDto update(
             Long id,
-            UpdateProductDto dto
+            UpdateProductDto dto,
+            UserDetailsImpl currentUser
     );
 
     ProductResponseDto partialUpdate(
             Long id,
-            PartialUpdateProductDto dto
+            PartialUpdateProductDto dto,
+            UserDetailsImpl currentUser
     );
 
-    void delete(Long id);
+    void delete(
+            Long id,
+            UserDetailsImpl currentUser
+    );
 
     /*
      * Endpoints técnicos anteriores.

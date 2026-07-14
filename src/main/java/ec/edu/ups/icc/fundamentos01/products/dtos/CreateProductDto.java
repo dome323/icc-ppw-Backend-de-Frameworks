@@ -9,17 +9,9 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
-/*
- * DTO utilizado para crear un producto.
- *
- * Ahora recibe varios IDs de categorías
- * mediante categoryIds.
- */
 public class CreateProductDto {
 
-    @NotBlank(
-            message = "El nombre es obligatorio"
-    )
+    @NotBlank(message = "El nombre es obligatorio")
     @Size(
             min = 3,
             max = 150,
@@ -27,59 +19,23 @@ public class CreateProductDto {
     )
     private String name;
 
-    @NotNull(
-            message = "El precio es obligatorio"
-    )
+    @NotNull(message = "El precio es obligatorio")
     @DecimalMin(
             value = "0.0",
             inclusive = true,
-            message = "El precio no puede ser negativo"
+            message = "El precio debe ser mayor o igual a 0"
     )
     private Double price;
 
-    @NotNull(
-            message = "El stock es obligatorio"
-    )
+    @NotNull(message = "El stock es obligatorio")
     @Min(
             value = 0,
-            message = "El stock no puede ser negativo"
+            message = "El stock debe ser mayor o igual a 0"
     )
     private Integer stock;
 
-    @NotNull(
-            message = "El ID del usuario es obligatorio"
-    )
-    @Min(
-            value = 1,
-            message = "El ID del usuario debe ser mayor a 0"
-    )
-    private Long userId;
-
-    /*
-     * Un producto debe tener al menos
-     * una categoría.
-     */
-    @NotEmpty(
-            message = "Debe seleccionar al menos una categoría"
-    )
+    @NotEmpty(message = "Debe seleccionar al menos una categoría")
     private Set<Long> categoryIds;
-
-    public CreateProductDto() {
-    }
-
-    public CreateProductDto(
-            String name,
-            Double price,
-            Integer stock,
-            Long userId,
-            Set<Long> categoryIds
-    ) {
-        this.name = name;
-        this.price = price;
-        this.stock = stock;
-        this.userId = userId;
-        this.categoryIds = categoryIds;
-    }
 
     public String getName() {
         return name;
@@ -105,21 +61,11 @@ public class CreateProductDto {
         this.stock = stock;
     }
 
-    public Long getUserId() {
-        return userId;
-    }
-
-    public void setUserId(Long userId) {
-        this.userId = userId;
-    }
-
     public Set<Long> getCategoryIds() {
         return categoryIds;
     }
 
-    public void setCategoryIds(
-            Set<Long> categoryIds
-    ) {
+    public void setCategoryIds(Set<Long> categoryIds) {
         this.categoryIds = categoryIds;
     }
 }

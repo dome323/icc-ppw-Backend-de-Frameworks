@@ -7,6 +7,7 @@ import org.springframework.data.domain.Slice;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
@@ -24,6 +25,7 @@ import ec.edu.ups.icc.fundamentos01.products.dtos.PartialUpdateProductDto;
 import ec.edu.ups.icc.fundamentos01.products.dtos.ProductResponseDto;
 import ec.edu.ups.icc.fundamentos01.products.dtos.UpdateProductDto;
 import ec.edu.ups.icc.fundamentos01.products.services.ProductService;
+import ec.edu.ups.icc.fundamentos01.security.services.UserDetailsImpl;
 import jakarta.validation.Valid;
 
 /*
@@ -49,13 +51,16 @@ public class ProductsController {
      * Crear producto
      * POST /api/products
      *
-     * Requiere autenticación por .anyRequest().authenticated()
+     * El owner ya no se recibe desde el body.
+     * El owner se obtiene desde el token JWT mediante @AuthenticationPrincipal.
      */
     @PostMapping
     public ResponseEntity<ProductResponseDto> create(
-            @Valid @RequestBody CreateProductDto dto
+            @Valid @RequestBody CreateProductDto dto,
+            @AuthenticationPrincipal UserDetailsImpl currentUser
     ) {
-        ProductResponseDto created = productService.create(dto);
+        ProductResponseDto created =
+                productService.create(dto, currentUser);
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
@@ -162,15 +167,16 @@ public class ProductsController {
      * PUT /api/products/{id}
      *
      * No lleva @PreAuthorize aquí.
-     * La validación de ownership se hará en el servicio en la Práctica 13.
+     * La validación de ownership se hace en el servicio.
      */
     @PutMapping("/{id:\\d+}")
     public ResponseEntity<ProductResponseDto> update(
             @PathVariable("id") Long id,
-            @Valid @RequestBody UpdateProductDto dto
+            @Valid @RequestBody UpdateProductDto dto,
+            @AuthenticationPrincipal UserDetailsImpl currentUser
     ) {
         ProductResponseDto updated =
-                productService.update(id, dto);
+                productService.update(id, dto, currentUser);
 
         return ResponseEntity.ok(updated);
     }
@@ -180,14 +186,16 @@ public class ProductsController {
      * PATCH /api/products/{id}
      *
      * No lleva @PreAuthorize aquí.
+     * La validación de ownership se hace en el servicio.
      */
     @PatchMapping("/{id:\\d+}")
     public ResponseEntity<ProductResponseDto> partialUpdate(
             @PathVariable("id") Long id,
-            @Valid @RequestBody PartialUpdateProductDto dto
+            @Valid @RequestBody PartialUpdateProductDto dto,
+            @AuthenticationPrincipal UserDetailsImpl currentUser
     ) {
         ProductResponseDto updated =
-                productService.partialUpdate(id, dto);
+                productService.partialUpdate(id, dto, currentUser);
 
         return ResponseEntity.ok(updated);
     }
@@ -197,13 +205,14 @@ public class ProductsController {
      * DELETE /api/products/{id}
      *
      * No lleva @PreAuthorize aquí.
-     * La validación de ownership se hará en el servicio en la Práctica 13.
+     * La validación de ownership se hace en el servicio.
      */
     @DeleteMapping("/{id:\\d+}")
     public ResponseEntity<Void> delete(
-            @PathVariable("id") Long id
+            @PathVariable("id") Long id,
+            @AuthenticationPrincipal UserDetailsImpl currentUser
     ) {
-        productService.delete(id);
+        productService.delete(id, currentUser);
 
         return ResponseEntity.noContent().build();
     }

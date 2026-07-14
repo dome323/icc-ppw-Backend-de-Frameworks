@@ -813,3 +813,180 @@ En cambio, `GET /api/products/page` puede ser consumido por cualquier usuario au
 ## Conclusión
 
 La autorización por roles permite restringir acciones según el tipo de usuario. Con `@PreAuthorize("hasRole('ADMIN')")`, solo los administradores pueden consultar el listado completo de productos.   
+
+# Práctica 13: Validación de Ownership
+
+## Objetivo
+
+En esta práctica se implementó la validación de ownership o propiedad de recursos en productos.
+
+El objetivo fue asegurar que un usuario autenticado con `ROLE_USER` solo pueda modificar o eliminar productos que le pertenecen, mientras que un usuario con `ROLE_ADMIN` pueda modificar o eliminar cualquier producto.
+
+También se ajustó la creación de productos para que el propietario ya no se reciba desde el body mediante `userId`, sino que se obtenga automáticamente desde el token JWT del usuario autenticado.
+
+---
+
+## Cambios realizados
+
+- Se eliminó el campo `userId` de `CreateProductDto`.
+- Se actualizó `ProductService` para recibir el usuario autenticado.
+- Se actualizó `ProductsController` usando `@AuthenticationPrincipal`.
+- Se agregó validación de ownership en `ProductServiceImpl`.
+- Se permitió que `ROLE_ADMIN` pueda modificar productos ajenos.
+- Se actualizó `GlobalExceptionHandler` para mostrar el mensaje real del acceso denegado.
+
+---
+
+## Evidencias
+
+### Evidencia 1: Creación de producto con usuario autenticado
+
+Punto final utilizado:
+
+```http
+POST /api/products
+```
+
+En esta prueba se creó un producto usando el token de `Usuario A`.
+
+El producto fue creado correctamente con estado `201 Created` y el campo `owner` corresponde al usuario autenticado.
+
+![Producto creado con owner desde token](img/p13-producto-owner-token.png)
+
+---
+
+### Evidencia 2: Bloqueo por producto ajeno
+
+Punto final utilizado:
+
+```http
+PUT /api/products/{id}
+```
+
+En esta prueba, `Usuario B` intentó modificar un producto que pertenece a `Usuario A`.
+
+El sistema bloqueó correctamente la operación con estado `403 Forbidden`.
+
+Mensaje obtenido:
+
+```txt
+No puedes modificar productos ajenos
+```
+
+![Bloqueo por producto ajeno](img/p13-update-ajeno-403.png)
+
+---
+
+### Evidencia 3: Eliminación de producto ajeno bloqueada
+
+Punto final utilizado:
+
+```http
+DELETE /api/products/{id}
+```
+
+En esta prueba, `Usuario B` intentó eliminar un producto que pertenece a `Usuario A`.
+
+El sistema rechazó la eliminación porque el producto no pertenece al usuario autenticado.
+
+Resultado obtenido:
+
+```txt
+403 Forbidden
+```
+
+![Bloqueo al eliminar producto ajeno](img/p13-delete-ajeno-403.png)
+
+---
+
+### Evidencia 4: ADMIN modificando producto ajeno
+
+Punto final utilizado:
+
+```http
+PUT /api/products/{id}
+```
+
+En esta prueba se utilizó un token con `ROLE_ADMIN`.
+
+El usuario administrador pudo modificar correctamente un producto perteneciente a otro usuario.
+
+Resultado obtenido:
+
+```txt
+200 OK
+```
+
+![ADMIN modifica producto ajeno](img/p13-admin-update-ajeno-200.png)
+
+---
+
+## ¿Qué es ownership?
+
+Ownership significa propiedad de un recurso.
+
+En este proyecto, un producto pertenece a un usuario mediante el campo `owner`. Por eso, antes de modificar o eliminar un producto, el sistema valida si el usuario autenticado es el dueño del producto.
+
+Si el usuario autenticado es dueño del producto, la operación se permite. Si no es dueño, la operación se rechaza con `403 Forbidden`.
+
+---
+
+## ¿Por qué no es seguro recibir userId en CreateProductDto?
+
+No es seguro recibir `userId` en `CreateProductDto` porque el cliente podría enviar el ID de otro usuario y crear productos a nombre de una persona diferente.
+
+Por ejemplo, un usuario autenticado podría enviar en el body el ID de otro usuario:
+
+```json
+{
+  "name": "Laptop",
+  "price": 900,
+  "stock": 10,
+  "userId": 5,
+  "categoryIds": [1, 2]
+}
+```
+
+Esto permitiría crear productos para un usuario diferente al autenticado.
+
+Por seguridad, el owner debe obtenerse desde el token JWT, ya que el token representa al usuario que inició sesión.
+
+---
+
+## Diferencia entre autorización por rol y autorización por ownership
+
+La autorización por rol valida qué tipo de usuario realiza la acción.
+
+Por ejemplo:
+
+```txt
+ROLE_ADMIN puede acceder a funcionalidades administrativas.
+ROLE_USER tiene permisos limitados.
+```
+
+La autorización por ownership valida si el recurso pertenece al usuario autenticado.
+
+Por ejemplo:
+
+```txt
+Usuario A puede modificar sus propios productos.
+Usuario B no puede modificar productos de Usuario A.
+ROLE_ADMIN sí puede modificar productos de cualquier usuario.
+```
+
+En resumen:
+
+```txt
+Autorización por rol: ¿Qué rol tiene este usuario?
+Autorización por ownership: ¿Este recurso le pertenece a este usuario?
+```
+
+---
+
+## Conclusión
+
+Con esta práctica se reforzó la seguridad de la API aplicando autorización contextual.
+
+Ahora, un usuario autenticado no solo necesita tener un token válido, sino que también debe ser propietario del producto para poder modificarlo o eliminarlo.
+
+Esto evita que usuarios normales puedan modificar o eliminar productos ajenos, mientras que los administradores mantienen permisos especiales sobre todos los productos.

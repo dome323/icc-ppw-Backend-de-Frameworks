@@ -9,6 +9,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +29,7 @@ import ec.edu.ups.icc.fundamentos01.products.dtos.UpdateProductDto;
 import ec.edu.ups.icc.fundamentos01.products.entities.ProductEntity;
 import ec.edu.ups.icc.fundamentos01.products.mappers.ProductMapper;
 import ec.edu.ups.icc.fundamentos01.products.repositories.ProductRepository;
+import ec.edu.ups.icc.fundamentos01.security.services.UserDetailsImpl;
 import ec.edu.ups.icc.fundamentos01.users.entity.UserEntity;
 import ec.edu.ups.icc.fundamentos01.users.repositories.UserRepository;
 
@@ -78,23 +81,19 @@ public class ProductServiceImpl implements ProductService {
     }
 
     /*
-     * Crea un producto relacionado con:
+     * Crea un producto usando como owner
+     * al usuario autenticado.
      *
-     * - un usuario
-     * - una o varias categorías
+     * El owner ya no se toma desde el body.
+     * Se toma desde el token JWT.
      */
     @Override
-    public ProductResponseDto create(CreateProductDto dto) {
+    public ProductResponseDto create(
+            CreateProductDto dto,
+            UserDetailsImpl currentUser
+    ) {
 
-        UserEntity owner = userRepository
-                .findById(dto.getUserId())
-                .orElseThrow(() ->
-                        new NotFoundException("User not found")
-                );
-
-        if (owner.isDeleted()) {
-            throw new NotFoundException("User not found");
-        }
+        UserEntity owner = findCurrentUserEntity(currentUser);
 
         Set<CategoryEntity> categories =
                 validateAndGetCategories(dto.getCategoryIds());
@@ -126,13 +125,19 @@ public class ProductServiceImpl implements ProductService {
     /*
      * Actualización completa.
      *
-     * Las categorías enviadas reemplazan
-     * todas las categorías anteriores.
+     * Primero se valida que el usuario autenticado
+     * sea dueño del producto o tenga ROLE_ADMIN.
      */
     @Override
-    public ProductResponseDto update(Long id, UpdateProductDto dto) {
+    public ProductResponseDto update(
+            Long id,
+            UpdateProductDto dto,
+            UserDetailsImpl currentUser
+    ) {
 
         ProductEntity entity = findActiveEntity(id);
+
+        validateOwnership(entity, currentUser);
 
         Set<CategoryEntity> categories =
                 validateAndGetCategories(dto.getCategoryIds());
@@ -165,14 +170,19 @@ public class ProductServiceImpl implements ProductService {
 
     /*
      * Actualización parcial.
+     *
+     * También valida ownership antes de modificar.
      */
     @Override
     public ProductResponseDto partialUpdate(
             Long id,
-            PartialUpdateProductDto dto
+            PartialUpdateProductDto dto,
+            UserDetailsImpl currentUser
     ) {
 
         ProductEntity entity = findActiveEntity(id);
+
+        validateOwnership(entity, currentUser);
 
         if (dto.getName() != null) {
 
@@ -218,11 +228,18 @@ public class ProductServiceImpl implements ProductService {
 
     /*
      * Eliminación lógica.
+     *
+     * Solo el dueño o un ADMIN puede eliminar.
      */
     @Override
-    public void delete(Long id) {
+    public void delete(
+            Long id,
+            UserDetailsImpl currentUser
+    ) {
 
         ProductEntity entity = findActiveEntity(id);
+
+        validateOwnership(entity, currentUser);
 
         entity.setDeleted(true);
 
@@ -347,9 +364,6 @@ public class ProductServiceImpl implements ProductService {
 
     /*
      * Retorna productos activos usando Page.
-     *
-     * Incluye metadatos completos:
-     * totalElements, totalPages, number, size, first, last.
      */
     @Override
     @Transactional(readOnly = true)
@@ -364,9 +378,6 @@ public class ProductServiceImpl implements ProductService {
 
     /*
      * Retorna productos activos usando Slice.
-     *
-     * No incluye totalElements ni totalPages.
-     * Es más liviano para navegación secuencial.
      */
     @Override
     @Transactional(readOnly = true)
@@ -381,8 +392,6 @@ public class ProductServiceImpl implements ProductService {
 
     /*
      * Retorna productos activos de una categoría usando Page.
-     *
-     * Mantiene los filtros de la práctica anterior y agrega paginación.
      */
     @Override
     @Transactional(readOnly = true)
@@ -419,8 +428,6 @@ public class ProductServiceImpl implements ProductService {
 
     /*
      * Retorna productos activos de una categoría usando Slice.
-     *
-     * No calcula totalElements ni totalPages.
      */
     @Override
     @Transactional(readOnly = true)
@@ -468,10 +475,6 @@ public class ProductServiceImpl implements ProductService {
             );
         }
 
-        /*
-         * Si se envió categoryId,
-         * la categoría debe existir.
-         */
         if (filters.getCategoryId() != null
                 && !categoryRepository.existsByIdAndDeletedFalse(
                         filters.getCategoryId()
@@ -496,10 +499,6 @@ public class ProductServiceImpl implements ProductService {
             );
         }
 
-        /*
-         * Si se envió userId,
-         * el usuario debe existir.
-         */
         if (filters.getUserId() != null
                 && !userRepository.existsByIdAndDeletedFalse(
                         filters.getUserId()
@@ -550,6 +549,75 @@ public class ProductServiceImpl implements ProductService {
     }
 
     /*
+     * Obtiene el usuario autenticado como entidad JPA.
+     *
+     * currentUser viene desde el token JWT.
+     */
+    private UserEntity findCurrentUserEntity(
+            UserDetailsImpl currentUser
+    ) {
+
+        if (currentUser == null) {
+            throw new AccessDeniedException("Usuario no autenticado");
+        }
+
+        return userRepository
+                .findByIdAndDeletedFalse(currentUser.getId())
+                .orElseThrow(() ->
+                        new AccessDeniedException("Usuario no autorizado")
+                );
+    }
+
+    /*
+     * Valida si el usuario autenticado puede modificar
+     * o eliminar el producto.
+     *
+     * ROLE_ADMIN puede modificar cualquier producto.
+     * ROLE_USER solo puede modificar productos propios.
+     */
+    private void validateOwnership(
+            ProductEntity product,
+            UserDetailsImpl currentUser
+    ) {
+
+        if (currentUser == null) {
+            throw new AccessDeniedException("Usuario no autenticado");
+        }
+
+        if (hasRole(currentUser, "ROLE_ADMIN")) {
+            return;
+        }
+
+        if (product.getOwner() == null
+                || product.getOwner().getId() == null) {
+
+            throw new AccessDeniedException(
+                    "El producto no tiene propietario válido"
+            );
+        }
+
+        if (!product.getOwner().getId().equals(currentUser.getId())) {
+            throw new AccessDeniedException(
+                    "No puedes modificar productos ajenos"
+            );
+        }
+    }
+
+    /*
+     * Verifica si el usuario tiene un rol específico.
+     */
+    private boolean hasRole(
+            UserDetailsImpl user,
+            String role
+    ) {
+
+        return user.getAuthorities()
+                .stream()
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch(authority -> authority.equals(role));
+    }
+
+    /*
      * Convierte un texto vacío en null.
      */
     private String normalizeName(String name) {
@@ -581,7 +649,9 @@ public class ProductServiceImpl implements ProductService {
 
         String sortBy = normalizeSortBy(pagination.getSortBy());
 
-        Sort.Direction direction = normalizeDirection(pagination.getDirection());
+        Sort.Direction direction = normalizeDirection(
+                pagination.getDirection()
+        );
 
         Sort sort = Sort.by(direction, sortBy);
 
@@ -594,9 +664,6 @@ public class ProductServiceImpl implements ProductService {
 
     /*
      * Valida que el campo de ordenamiento exista y esté permitido.
-     *
-     * Se usa lista blanca para evitar ordenar por campos inexistentes
-     * o por relaciones complejas no preparadas para esta práctica.
      */
     private String normalizeSortBy(String sortBy) {
 

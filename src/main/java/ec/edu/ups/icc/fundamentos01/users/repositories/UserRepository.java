@@ -12,16 +12,18 @@ public interface UserRepository
         extends JpaRepository<UserEntity, Long> {
 
     Optional<UserEntity> findByEmail(String email);
+
     boolean existsByIdAndDeletedFalse(Long id);
 
     Optional<UserEntity> findByEmailAndDeletedFalse(
-        String email
+            String email
     );
 
     boolean existsByEmail(
             String email
     );
 
-
-
+    Optional<UserEntity> findByIdAndDeletedFalse(
+            Long id
+    );
 }

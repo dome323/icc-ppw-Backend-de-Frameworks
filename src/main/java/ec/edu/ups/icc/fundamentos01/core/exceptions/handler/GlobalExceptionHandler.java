@@ -154,7 +154,11 @@ public class GlobalExceptionHandler {
     }
 
     /*
-     * Maneja accesos denegados de Spring Security.
+     * Maneja errores de acceso denegado.
+     *
+     * Se usa cuando:
+     * - Un usuario autenticado no tiene permiso.
+     * - Un usuario intenta modificar o eliminar un producto ajeno.
      */
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse>
@@ -163,9 +167,15 @@ public class GlobalExceptionHandler {
                     HttpServletRequest request
             ) {
 
+        String message = exception.getMessage();
+
+        if (message == null || message.isBlank()) {
+            message = "Acceso denegado";
+        }
+
         ErrorResponse response = new ErrorResponse(
                 HttpStatus.FORBIDDEN,
-                "Acceso denegado. No tienes los permisos necesarios",
+                message,
                 request.getRequestURI()
         );
 
