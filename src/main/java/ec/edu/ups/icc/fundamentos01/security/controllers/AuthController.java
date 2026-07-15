@@ -37,8 +37,8 @@ public class AuthController {
      */
     @PostMapping("/register")
     public ResponseEntity<AuthResponseDto> register(@Valid @RequestBody RegisterRequestDto registerRequest) {
-        // @Valid valida anotaciones en RegisterRequestDto
         AuthResponseDto response = authService.register(registerRequest);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response); // 201 Created con JWT
+        return ResponseEntity.status(HttpStatus.CREATED).body(response); 
+        
     }
 }
