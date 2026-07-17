@@ -1,44 +1,188 @@
 package ec.edu.ups.icc.fundamentos01.security.controllers;
 
-import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
 
 import ec.edu.ups.icc.fundamentos01.security.dtos.AuthResponseDto;
 import ec.edu.ups.icc.fundamentos01.security.dtos.LoginRequestDto;
+import ec.edu.ups.icc.fundamentos01.security.dtos.RefreshTokenRequestDto;
 import ec.edu.ups.icc.fundamentos01.security.dtos.RegisterRequestDto;
 import ec.edu.ups.icc.fundamentos01.security.services.AuthService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 
+@Tag(
+        name = "Autenticación",
+        description = "Endpoints públicos para registro, inicio de sesión, refresh token y logout"
+)
+@SecurityRequirement(name = "bearerAuth")
 @RestController
-@RequestMapping("/auth") // Prefijo para todos los endpoints de autenticación
+@RequestMapping("/auth")
 public class AuthController {
 
-    private final AuthService authService; // Servicio de lógica de autenticación
+    private final AuthService authService;
 
-    public AuthController(AuthService authService) {
+    public AuthController(
+            AuthService authService
+    ) {
         this.authService = authService;
     }
 
-    /**
-     * Login - Endpoint público (configurado en SecurityConfig)
-     * POST /auth/login
+    /*
+     * Login.
+     *
+     * Devuelve:
+     * - access token
+     * - refresh token
      */
+    @Operation(
+            summary = "Iniciar sesión",
+            description = "Valida las credenciales del usuario y devuelve un access token y un refresh token."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Inicio de sesión exitoso"
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "Datos de entrada inválidos"
+            ),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "Credenciales inválidas"
+            )
+    })
     @PostMapping("/login")
-    public ResponseEntity<AuthResponseDto> login(@Valid @RequestBody LoginRequestDto loginRequest) {
-        // @Valid valida anotaciones en LoginRequestDto (email, password requeridos)
-        AuthResponseDto response = authService.login(loginRequest);
-        return ResponseEntity.ok(response); // 200 OK con JWT
+    public ResponseEntity<AuthResponseDto> login(
+            @Valid @RequestBody LoginRequestDto request
+    ) {
+
+        AuthResponseDto response =
+                authService.login(
+                        request
+                );
+
+        return ResponseEntity.ok(
+                response
+        );
     }
 
-    /**
-     * Registro - Endpoint público (configurado en SecurityConfig)
-     * POST /auth/register
+    /*
+     * Registro.
+     *
+     * Crea usuario y devuelve:
+     * - access token
+     * - refresh token
      */
+    @Operation(
+            summary = "Registrar usuario",
+            description = "Crea un nuevo usuario, asigna ROLE_USER y devuelve un access token y un refresh token."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "201",
+                    description = "Usuario registrado correctamente"
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "Datos de entrada inválidos"
+            ),
+            @ApiResponse(
+                    responseCode = "409",
+                    description = "El email ya está registrado"
+            )
+    })
     @PostMapping("/register")
-    public ResponseEntity<AuthResponseDto> register(@Valid @RequestBody RegisterRequestDto registerRequest) {
-        AuthResponseDto response = authService.register(registerRequest);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response); 
-        
+    public ResponseEntity<AuthResponseDto> register(
+            @Valid @RequestBody RegisterRequestDto request
+    ) {
+
+        AuthResponseDto response =
+                authService.register(
+                        request
+                );
+
+        return ResponseEntity
+                .status(
+                        HttpStatus.CREATED
+                )
+                .body(
+                        response
+                );
+    }
+
+    /*
+     * Refresh.
+     *
+     * Recibe un refresh token válido
+     * y devuelve nuevos tokens.
+     */
+    @Operation(
+            summary = "Renovar tokens",
+            description = "Recibe un refresh token válido, revoca el anterior y devuelve un nuevo access token y un nuevo refresh token."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Tokens renovados correctamente"
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "Refresh token inválido, expirado o revocado"
+            )
+    })
+    @PostMapping("/refresh")
+    public ResponseEntity<AuthResponseDto> refresh(
+            @Valid @RequestBody RefreshTokenRequestDto request
+    ) {
+
+        AuthResponseDto response =
+                authService.refresh(
+                        request
+                );
+
+        return ResponseEntity.ok(
+                response
+        );
+    }
+
+    /*
+     * Logout.
+     *
+     * Revoca el refresh token recibido.
+     */
+    @Operation(
+            summary = "Cerrar sesión",
+            description = "Revoca el refresh token enviado para cerrar la sesión del usuario."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "204",
+                    description = "Sesión cerrada correctamente"
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "Refresh token inválido, expirado o revocado"
+            )
+    })
+    @PostMapping("/logout")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void logout(
+            @Valid @RequestBody RefreshTokenRequestDto request
+    ) {
+
+        authService.logout(
+                request
+        );
     }
 }

@@ -1,5 +1,7 @@
+# dockerfile es un archivo con isntreucicones  que le dice al 
+#docker como construir la img de mi proyecto
 # ==========================
-# ETAPA 1: BUILD
+# ETAPA 1: BUILD - COMPILACION
 # ==========================
 FROM eclipse-temurin:21-jdk AS build
 
@@ -17,7 +19,7 @@ COPY src src
 RUN ./gradlew clean bootJar -x test --no-daemon
 
 # ==========================
-# ETAPA 2: RUNTIME
+# ETAPA 2: RUNTIME - EJECUCION
 # ==========================
 FROM eclipse-temurin:21-jre
 

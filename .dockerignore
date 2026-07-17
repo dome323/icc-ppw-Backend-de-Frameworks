@@ -1,3 +1,5 @@
+# esto sirve para decirle al docker no copies estos archivs
+# o carpetas cuando contruya la img.
 build/
 .gradle/
 .git/

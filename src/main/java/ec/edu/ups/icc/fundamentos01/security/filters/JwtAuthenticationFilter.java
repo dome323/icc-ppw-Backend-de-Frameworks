@@ -29,7 +29,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
  *
  * Lee el header Authorization,
  * extrae el token Bearer,
- * valida el token y autentica al usuario.
+ * valida que sea access token
+ * y autentica al usuario.
  */
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -69,11 +70,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                             request
                     );
 
+            /*
+             * Importante:
+             * Solo se acepta access token.
+             * El refresh token no debe servir en Authorization: Bearer.
+             */
             if (
                     StringUtils.hasText(
                             jwt
                     )
-                            && jwtUtil.validateToken(
+                            && jwtUtil.validateAccessToken(
                                     jwt
                             )
             ) {

@@ -77,10 +77,19 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/auth/**").permitAll()
+                        .requestMatchers("/status").permitAll()
                         .requestMatchers("/status/**").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
+
+                        // Swagger / OpenAPI
+                        .requestMatchers("/swagger-ui/**").permitAll()
+                        .requestMatchers("/swagger-ui.html").permitAll()
+                        .requestMatchers("/v3/api-docs/**").permitAll()
+                        .requestMatchers("/webjars/**").permitAll()
+
+
                         .requestMatchers("/admin/**").hasRole("ADMIN")
-                        .requestMatchers("/moderator/**").hasAnyRole("ADMIN", "MODERATOR")
+                        .requestMatchers("/moderator/**").hasAnyRole("ADMIN")
                         .anyRequest().authenticated()
                 );
 
