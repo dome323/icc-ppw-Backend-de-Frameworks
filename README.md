@@ -1175,22 +1175,7 @@ Se evidencia el documento JSON generado por OpenAPI, incluyendo `openapi`, `path
 
 ---
 
-### Evidencia 3: AuthController documentado
-
-Se evidencia el controlador de autenticación con sus endpoints públicos:
-
-```http
-POST /api/auth/register
-POST /api/auth/login
-```
-
-También se muestran las descripciones de los endpoints.
-
-![AuthController documentado](img/p15-auth-controller.png)
-
----
-
-### Evidencia 4: Botón Authorize con JWT
+### Evidencia 3: Botón Authorize con JWT
 
 Se configuró Swagger para permitir autenticación con JWT mediante el esquema `bearerAuth`.
 
@@ -1198,7 +1183,7 @@ Se configuró Swagger para permitir autenticación con JWT mediante el esquema `
 
 ---
 
-### Evidencia 5: Endpoint protegido sin token
+### Evidencia 4: Endpoint protegido sin token
 
 Endpoint probado:
 
@@ -1216,7 +1201,7 @@ Al ejecutar el endpoint sin token, la API respondió:
 
 ---
 
-### Evidencia 6: Endpoint protegido con token desde Swagger
+### Evidencia 5: Endpoint protegido con token desde Swagger
 
 Endpoint probado:
 
@@ -1234,7 +1219,7 @@ Después de iniciar sesión, copiar el token y autorizarlo en Swagger, el endpoi
 
 ---
 
-### Evidencia 7: Endpoint ADMIN con usuario normal
+### Evidencia 6: Endpoint ADMIN con usuario normal
 
 Endpoint probado:
 
@@ -1258,7 +1243,7 @@ Como el endpoint requiere permisos de administrador, la API respondió:
 
 ---
 
-### Evidencia 8: Endpoint ADMIN con usuario administrador
+### Evidencia 7: Endpoint ADMIN con usuario administrador
 
 Endpoint probado:
 
