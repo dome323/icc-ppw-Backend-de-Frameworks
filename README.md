@@ -990,3 +990,492 @@ Con esta práctica se reforzó la seguridad de la API aplicando autorización co
 Ahora, un usuario autenticado no solo necesita tener un token válido, sino que también debe ser propietario del producto para poder modificarlo o eliminarlo.
 
 Esto evita que usuarios normales puedan modificar o eliminar productos ajenos, mientras que los administradores mantienen permisos especiales sobre todos los productos.
+
+---
+
+# Práctica 14: Refresh Token con JWT
+
+## Descripción
+
+En esta práctica se implementó el uso de `refreshToken` para renovar el `access token` sin necesidad de iniciar sesión nuevamente.
+
+El sistema permite:
+
+- Iniciar sesión y recibir un `token` y un `refreshToken`.
+- Renovar los tokens usando `/api/auth/refresh`.
+- Cerrar sesión usando `/api/auth/logout`.
+- Revocar refresh tokens para evitar que sean reutilizados.
+
+---
+
+## Evidencias
+
+### Evidencia 1: Login con refresh token
+
+Endpoint probado:
+
+```http
+POST /api/auth/login
+```
+
+En esta prueba se realizó el inicio de sesión correctamente.
+
+La respuesta devuelve:
+
+- `token`
+- `refreshToken`
+- `type`
+- `userId`
+- `name`
+- `email`
+- `roles`
+
+![Login con refresh token](img/p14-api-login-docker.png)
+
+---
+
+### Evidencia 2: Refresh exitoso
+
+Endpoint probado:
+
+```http
+POST /api/auth/refresh
+```
+
+Se envió el `refreshToken` en el body de la petición.
+
+La API respondió con `200 OK` y generó un nuevo `token` y un nuevo `refreshToken`.
+
+![Refresh exitoso](img/p14-refresh-exitoso.png)
+
+---
+
+### Evidencia 3: Logout
+
+Endpoint probado:
+
+```http
+POST /api/auth/logout
+```
+
+Se envió el `refreshToken` actual para cerrar sesión.
+
+La API respondió con `204 No Content`, indicando que el refresh token fue revocado correctamente.
+
+![Logout](img/p14-logout.png)
+
+---
+
+### Evidencia 4: Refresh después de logout
+
+Endpoint probado:
+
+```http
+POST /api/auth/refresh
+```
+
+Después de cerrar sesión, se intentó usar nuevamente el mismo `refreshToken`.
+
+La API respondió con `400 Bad Request`, indicando que el refresh token ya no es válido porque fue revocado.
+
+![Refresh después de logout](img/p14-refresh-despues-logout.png)
+
+---
+
+## Explicación breve
+
+### ¿Cuál es la diferencia entre access token y refresh token?
+
+El `access token` es el token que se usa para consumir endpoints protegidos de la API.
+
+Se envía en el header `Authorization` con el formato:
+
+```http
+Authorization: Bearer <token>
+```
+
+Este token tiene una duración corta, por ejemplo 30 minutos.
+
+El `refresh token` se usa únicamente para renovar la sesión cuando el access token expira. Tiene una duración más larga y se envía en el body del endpoint `/api/auth/refresh`.
+
+---
+
+### ¿Por qué el refresh token no debe usarse en Authorization: Bearer?
+
+El `refreshToken` no debe usarse en `Authorization: Bearer` porque no está diseñado para consumir endpoints protegidos.
+
+Su único propósito es renovar tokens mediante el endpoint:
+
+```http
+POST /api/auth/refresh
+```
+
+Si un refresh token se pudiera usar como Bearer token, sería un problema de seguridad, porque un token de larga duración podría acceder directamente a recursos protegidos.
+
+Por eso, el backend valida que el token enviado en el header sea de tipo `access` y no de tipo `refresh`.
+
+---
+
+### ¿Qué significa rotar un refresh token?
+
+Rotar un refresh token significa que cada vez que se usa un refresh token para renovar la sesión, ese refresh token anterior se revoca y se genera uno nuevo.
+
+---
+
+## Conclusión
+
+Se implementó correctamente el flujo de refresh token con JWT.
+
+La API ahora puede generar access tokens y refresh tokens, renovar sesión, revocar refresh tokens durante el logout y rechazar refresh tokens revocados. Esto mejora la seguridad del sistema de autenticación.
+
+# Práctica 15: Documentación con Swagger, OpenAPI y Seguridad JWT
+
+## Descripción
+
+En esta práctica se implementó la documentación interactiva de la API usando Swagger UI y OpenAPI.
+
+Swagger permitió visualizar los controladores, probar endpoints desde el navegador y enviar JWT mediante el botón `Authorize`.
+
+## Rutas principales
+
+| Ruta | Descripción |
+| ---- | ----------- |
+| `/api/swagger-ui/index.html` | Interfaz visual de Swagger UI |
+| `/api/v3/api-docs` | Documento OpenAPI en formato JSON |
+
+---
+
+## Evidencias
+
+### Evidencia 1: Swagger UI cargado
+
+Ruta utilizada:
+
+```http
+GET /api/swagger-ui/index.html
+```
+
+Se evidencia la lista de controladores y los endpoints agrupados por tags.
+
+![Swagger UI cargado](img/p15-swagger-ui.png)
+
+---
+
+### Evidencia 2: JSON OpenAPI
+
+Ruta utilizada:
+
+```http
+GET /api/v3/api-docs
+```
+
+Se evidencia el documento JSON generado por OpenAPI, incluyendo `openapi`, `paths` y `components`.
+
+![JSON OpenAPI](img/p15-openapi-json.png)
+
+---
+
+### Evidencia 3: AuthController documentado
+
+Se evidencia el controlador de autenticación con sus endpoints públicos:
+
+```http
+POST /api/auth/register
+POST /api/auth/login
+```
+
+También se muestran las descripciones de los endpoints.
+
+![AuthController documentado](img/p15-auth-controller.png)
+
+---
+
+### Evidencia 4: Botón Authorize con JWT
+
+Se configuró Swagger para permitir autenticación con JWT mediante el esquema `bearerAuth`.
+
+![Authorize Bearer JWT](img/p15-authorize-bearer.png)
+
+---
+
+### Evidencia 5: Endpoint protegido sin token
+
+Endpoint probado:
+
+```http
+GET /api/products/page?page=0&size=5
+```
+
+Al ejecutar el endpoint sin token, la API respondió:
+
+```txt
+401 Unauthorized
+```
+
+![Endpoint protegido sin token](img/p15-products-page-sin-token-401.png)
+
+---
+
+### Evidencia 6: Endpoint protegido con token desde Swagger
+
+Endpoint probado:
+
+```http
+GET /api/products/page?page=0&size=5
+```
+
+Después de iniciar sesión, copiar el token y autorizarlo en Swagger, el endpoint respondió:
+
+```txt
+200 OK
+```
+
+![Endpoint protegido con token](img/p15-products-page-con-token-200.png)
+
+---
+
+### Evidencia 7: Endpoint ADMIN con usuario normal
+
+Endpoint probado:
+
+```http
+GET /api/products
+```
+
+Se utilizó un token con rol:
+
+```txt
+ROLE_USER
+```
+
+Como el endpoint requiere permisos de administrador, la API respondió:
+
+```txt
+403 Forbidden
+```
+
+![Endpoint admin con usuario normal](img/p15-products-admin-user-403.png)
+
+---
+
+### Evidencia 8: Endpoint ADMIN con usuario administrador
+
+Endpoint probado:
+
+```http
+GET /api/products
+```
+
+Se utilizó un token con rol:
+
+```txt
+ROLE_ADMIN
+```
+
+La API permitió el acceso y respondió:
+
+```txt
+200 OK
+```
+
+![Endpoint admin con usuario administrador](img/p15-products-admin-200.png)
+
+---
+
+## Explicación breve
+
+### ¿Cuál es la diferencia entre Swagger UI y OpenAPI?
+
+OpenAPI es la especificación que describe la API en formato JSON o YAML.  
+Incluye información sobre rutas, métodos HTTP, parámetros, cuerpos de petición, respuestas, schemas y seguridad.
+
+Swagger UI es la interfaz visual que lee esa documentación OpenAPI y permite verla de forma interactiva desde el navegador.
+
+En resumen:
+
+```txt
+OpenAPI = descripción técnica de la API
+Swagger UI = interfaz visual para leer y probar la API
+```
+
+---
+
+### ¿Por qué Swagger puede ser público pero los endpoints seguir protegidos?
+
+Swagger UI puede ser público porque solo muestra la documentación de la API.
+
+Sin embargo, los endpoints protegidos siguen requiriendo JWT porque Spring Security mantiene la regla de autenticación para las rutas privadas.
+
+Por eso una persona puede ver la documentación, pero si intenta consumir un endpoint protegido sin token, la API responde `401 Unauthorized`.
+
+---
+
+### ¿Cómo se configura Swagger para enviar un JWT en Authorization: Bearer?
+
+Se configura un esquema de seguridad tipo HTTP Bearer en `OpenApiConfig`.
+
+Ese esquema se llama:
+
+```txt
+bearerAuth
+```
+
+Luego se usa `@SecurityRequirement(name = "bearerAuth")` en los controladores protegidos.
+
+Con esta configuración, Swagger muestra el botón `Authorize`. Al pegar el token JWT, Swagger envía automáticamente el header:
+
+```http
+Authorization: Bearer <token>
+```
+
+---
+
+## Conclusión
+
+Se documentó correctamente la API con Swagger y OpenAPI.
+
+Además, se integró la seguridad JWT en Swagger, permitiendo probar endpoints públicos y protegidos desde la interfaz web.
+
+---
+
+# Práctica 16: Despliegue en Ubuntu Server con Docker y Nginx
+
+## Descripción
+
+En esta práctica se desplegó la API Spring Boot dentro de una máquina virtual con Ubuntu Server.
+
+Se utilizaron contenedores Docker para ejecutar PostgreSQL, la API Spring Boot y Nginx.  
+Nginx quedó expuesto por el puerto `80`, mientras que Spring Boot y PostgreSQL quedaron privados dentro de la red Docker.
+
+---
+
+## Evidencias
+
+### Evidencia 1: Contenedores ejecutándose en Ubuntu Server
+
+Se verificó con `docker ps` que los contenedores `nginx`, `fundamentos-api` y `postgres` se encuentran en ejecución.
+
+También se evidencia que únicamente Nginx está publicado al exterior por el puerto `80`.
+
+![Docker ps con Nginx](img/p16-docker-ps-nginx.png)
+
+---
+
+### Evidencia 2: Validación de configuración de Nginx
+
+Se validó la configuración de Nginx con el comando:
+
+```bash
+docker exec nginx nginx -t
+```
+
+La respuesta confirmó que la configuración es correcta.
+
+![Nginx test](img/p16-nginx-test.png)
+
+---
+
+### Evidencia 3: Nginx activo desde Ubuntu Server
+
+Se probó Nginx desde Ubuntu usando:
+
+```bash
+curl http://localhost
+```
+
+La respuesta confirmó que Nginx está activo.
+
+![Nginx localhost](img/p16-nginx-localhost.png)
+
+---
+
+### Evidencia 4: Health check desde Ubuntu Server
+
+Se probó el endpoint de Actuator desde Ubuntu:
+
+```bash
+curl http://localhost/api/actuator/health
+```
+
+La API respondió con estado `UP`.
+
+![Health Ubuntu Nginx](img/p16-health-ubuntu-nginx.png)
+
+---
+
+### Evidencia 5: Health check desde la máquina anfitriona
+
+Desde Windows se accedió al endpoint:
+
+```http
+GET http://192.168.56.101/api/actuator/health
+```
+
+La respuesta mostró el estado `UP`, demostrando que la máquina anfitriona puede consumir la API mediante Nginx.
+
+![Health Host Nginx](img/p16-health-host-nginx.png)
+
+---
+
+### Evidencia 6: Consumo de login desde la máquina anfitriona
+
+Desde Bruno/Postman en Windows se probó el endpoint:
+
+```http
+POST http://192.168.56.101/api/auth/login
+```
+
+La API respondió correctamente, demostrando que el tráfico llega desde Windows hacia Nginx y luego hacia Spring Boot.
+
+![Login Host Nginx](img/p16-login-host-nginx.png)
+
+---
+
+### Evidencia 7: Swagger publicado mediante Nginx
+
+Se verificó que Swagger UI también está disponible desde la máquina anfitriona mediante Nginx.
+
+Ruta utilizada:
+
+```http
+GET http://192.168.56.101/api/swagger-ui/index.html
+```
+
+![Swagger Nginx](img/p16-swagger-nginx.png)
+
+---
+
+## Configuración de PostgreSQL
+
+En esta práctica se utilizó PostgreSQL como contenedor dentro de Ubuntu Server, conectado a la misma red Docker que la API.
+
+La API no tiene las credenciales dentro de la imagen.  
+La conexión a base de datos se entregó mediante variables de entorno usando el archivo `.env.ubuntu`.
+
+Ejemplo de conexión utilizada:
+
+```txt
+SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/devdb
+SPRING_DATASOURCE_USERNAME=ups
+SPRING_DATASOURCE_PASSWORD=ups123
+```
+
+Esto permite que la imagen de Spring Boot sea reutilizable, porque la configuración cambia según el entorno y no queda fija dentro del código.
+
+---
+
+## Explicación breve
+
+Nginx funciona como proxy inverso. Recibe las peticiones desde la máquina anfitriona por el puerto `80` y las redirige al contenedor de Spring Boot dentro de la red Docker.
+
+Spring Boot no se publica directamente al exterior, porque no tiene `-p 8080:8080`. Solo Nginx puede comunicarse con la API dentro de `app-network`.
+
+PostgreSQL también queda privado dentro de la red Docker y la API se conecta usando el nombre del contenedor `postgres`.
+
+---
+
+## Conclusión
+
+Se desplegó correctamente la API Spring Boot en Ubuntu Server usando Docker y Nginx.
+
+El resultado final permite consumir la API desde la máquina anfitriona a través de Nginx, manteniendo Spring Boot y PostgreSQL privados dentro de la red Docker.
